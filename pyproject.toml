@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "skak"
+version = "0.1.0"
+description = ""
+authors = ["Ole-Batting <batting.ole@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+stockfish = "^3.28.0"
+pygame = "^2.6.1"
+numpy = "^2.2.3"
+einops = "^0.8.1"
+snakeviz = "^2.2.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
