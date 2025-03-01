@@ -45,7 +45,8 @@ piece_char = {
 }
 
 EMPTY = 0
-OUT_OF_BOUNDS = -1
+OUT_OF_BOUNDS = 0b100_000000
+PAD = 2
 
 FILE_A = 0
 FILE_B = 1
@@ -97,7 +98,6 @@ class Square:
     def __init__(self, file: int, rank: int, invalid: bool = False):
         self.file = file
         self.rank = rank
-        self.invalid = invalid
 
     def __sub__(self, other):
         return Delta(
@@ -108,13 +108,9 @@ class Square:
     def __add__(self, other: Delta):
         file = self.file + other.file
         rank = self.rank + other.rank
-        if file < 0 or file >= 8 or rank < 0 or rank >= 8:
-            return Square(file=file, rank=rank, invalid=True)
         return Square(file=file, rank=rank)
 
     def __str__(self):
-        if self.invalid:
-            return f'{self.file}_{self.rank}'
         return FILE_NAME[self.file] + str(self.rank + 1)
 
     def __repr__(self):
@@ -153,7 +149,12 @@ class State:
         self.blacks_short_castle = True
         self.blacks_long_castle = True
         self.enpassant = None
-        self.data = np.array([[EMPTY] * 8] * 8)
+        self.data = np.pad(
+            np.array([[EMPTY] * 8] * 8),
+            PAD,
+            mode='constant',
+            constant_values=OUT_OF_BOUNDS,
+        )
         self[Square(FILE_A, RANK_1)] = WHITE_ROOK
         self[Square(FILE_B, RANK_1)] = WHITE_KNIGHT
         self[Square(FILE_C, RANK_1)] = WHITE_BISHOP
@@ -194,12 +195,10 @@ class State:
         self.oppo = BLACK
 
     def __getitem__(self, index: Square):
-        if index.invalid:
-            return OUT_OF_BOUNDS
-        return self.data[index.file, index.rank]
+        return self.data[index.file + PAD, index.rank + PAD]
 
     def __setitem__(self, index: Square, value: int):
-        self.data[index.file, index.rank] = value
+        self.data[index.file + PAD, index.rank + PAD] = value
 
     def __repr__(self):
         fen = ""
@@ -244,7 +243,10 @@ class State:
         return new_state
 
     def locate(self, piece: int):
-        return [Square(file, rank) for file, rank in np.argwhere(self.data == piece)]
+        return [
+            Square(file - PAD, rank - PAD) 
+            for file, rank in np.argwhere(self.data == piece)
+        ]
 
     def is_mine(self, square: Square):
         return self[square] & self.mine
@@ -332,7 +334,7 @@ class State:
         )
 
     def check_move(self, move: Move):
-        if self[move.end] & self.mine:
+        if self[move.end] & (self.mine | OUT_OF_BOUNDS):
             return False
         elif self.is_move_self_check(move):
             return False
@@ -494,8 +496,6 @@ class State:
         dir = 1 if self.whites_turn else -1
         for delta in [Delta(0, 2 * dir), Delta(0, dir), Delta(-1, dir), Delta(1, dir)]:
             end = square + delta
-            if end.invalid:
-                continue
             move = Move(square, square + delta)
             if self.check_move(move):
                 moves.append(move)
@@ -507,11 +507,11 @@ class State:
             for dist in range(1, 8):
                 delta = Delta(dist * sign_file, dist * sign_rank)
                 end = square + delta
-                if end.invalid:
-                    break
                 move = Move(square, end)
                 if self.check_move(move):
                     moves.append(move)
+                elif self[end] == OUT_OF_BOUNDS:
+                    break
         return moves
 
     def generate_knight_moves(self, square: Square):
@@ -521,8 +521,6 @@ class State:
                 for sign_rank in [-1, 1]:
                     delta = Delta(dist_file * sign_file, dist_rank * sign_rank)
                     end = square + delta
-                    if end.invalid:
-                        continue
                     move = Move(square, end)
                     if self.check_move(move):
                         moves.append(move)
@@ -535,11 +533,11 @@ class State:
                 for dist in range(1, 8):
                     delta = Delta(dist * sign_file, dist * sign_rank)
                     end = square + delta
-                    if end.invalid:
-                        break
                     move = Move(square, end)
                     if self.check_move(move):
                         moves.append(move)
+                    elif self[end] == OUT_OF_BOUNDS:
+                        break
         return moves
 
     def generate_queen_moves(self, square: Square):
@@ -556,8 +554,6 @@ class State:
         ]:
             delta = Delta(dist_file, dist_rank)
             end = square + delta
-            if end.invalid:
-                continue
             move = Move(square, end)
             if self.check_move(move):
                 moves.append(move)
