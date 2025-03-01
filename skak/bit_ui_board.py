@@ -3,7 +3,7 @@ import numpy as np
 import pygame
 
 from skak.bit_state import (
-    Square, State, EMPTY,
+    Square, State, EMPTY, PAD,
     WHITE_PAWN, WHITE_ROOK, WHITE_KNIGHT, WHITE_BISHOP, WHITE_QUEEN, WHITE_KING,
     BLACK_PAWN, BLACK_ROOK, BLACK_KNIGHT, BLACK_BISHOP, BLACK_QUEEN, BLACK_KING,
 )
@@ -54,8 +54,8 @@ class Board:
         self.screen.blit(self.blank, (0, 0))
 
     def blit_state(self, state: State):
-        for rank in range(8):
-            for file in range(8):
+        for rank in range(PAD, 8+PAD):
+            for file in range(PAD, 8+PAD):
                 piece = state[Square(file, rank)]
                 if piece == EMPTY:
                     continue
@@ -105,11 +105,15 @@ class Board:
         self.screen.blit(surf, (x, x))
 
     def loc(self, file, rank):
+        file -= PAD
+        rank -= PAD
         inverted_rank = 7 - rank
         return np.array([file, inverted_rank]) * self.square_width
 
     def unloc(self, x, y):
         file, inverted_rank = np.array([x, y]) // self.square_width
         rank = 7 - inverted_rank
+        file += PAD
+        rank += PAD
         return Square(file, rank)
 

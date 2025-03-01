@@ -48,24 +48,25 @@ EMPTY = 0
 OUT_OF_BOUNDS = 0b100_000000
 PAD = 2
 
-FILE_A = 0
-FILE_B = 1
-FILE_C = 2
-FILE_D = 3
-FILE_E = 4
-FILE_F = 5
-FILE_G = 6
-FILE_H = 7
-FILE_NAME = "abcdefgh"
+FILE_A = 2
+FILE_B = 3
+FILE_C = 4
+FILE_D = 5
+FILE_E = 6
+FILE_F = 7
+FILE_G = 8
+FILE_H = 9
+FILE_NAME = "qwabcdefghzx"
 
-RANK_1 = 0
-RANK_2 = 1
-RANK_3 = 2
-RANK_4 = 3
-RANK_5 = 4
-RANK_6 = 5
-RANK_7 = 6
-RANK_8 = 7
+
+RANK_1 = 2
+RANK_2 = 3
+RANK_3 = 4
+RANK_4 = 5
+RANK_5 = 6
+RANK_6 = 7
+RANK_7 = 8
+RANK_8 = 9
 
 
 class Delta:
@@ -111,10 +112,13 @@ class Square:
         return Square(file=file, rank=rank)
 
     def __str__(self):
-        return FILE_NAME[self.file] + str(self.rank + 1)
+        return FILE_NAME[self.file] + str(self.rank + 1 - PAD)
 
     def __repr__(self):
         return str(self)
+
+    def __eq__(self, other):
+        return self.file == other.file and self.rank == other.rank
 
 
 class Move:
@@ -195,16 +199,16 @@ class State:
         self.oppo = BLACK
 
     def __getitem__(self, index: Square):
-        return self.data[index.file + PAD, index.rank + PAD]
+        return self.data[index.file, index.rank]
 
     def __setitem__(self, index: Square, value: int):
-        self.data[index.file + PAD, index.rank + PAD] = value
+        self.data[index.file, index.rank] = value
 
     def __repr__(self):
         fen = ""
-        for rank in range(8):
+        for rank in range(RANK_1, RANK_8+1):
             spaces = 0
-            for file in range(8):
+            for file in range(FILE_A, FILE_H+1):
                 square = Square(file, rank)
                 piece = self[square]
                 if piece == EMPTY:
@@ -244,7 +248,7 @@ class State:
 
     def locate(self, piece: int):
         return [
-            Square(file - PAD, rank - PAD) 
+            Square(file, rank) 
             for file, rank in np.argwhere(self.data == piece)
         ]
 
@@ -260,7 +264,7 @@ class State:
         elif delta == Delta(0, dir):
             return self[move.end] == EMPTY
         elif delta == Delta(1, dir) or delta == Delta(-1, dir):
-            return self[move.end] & self.oppo or self.enpassant == move.end
+            return (self[move.end] & self.oppo) or (self.enpassant and self.enpassant == move.end)
         else:
             return False
 
@@ -451,12 +455,12 @@ class State:
         if self[move.start] == WHITE_PAWN:
             if move.delta() == Delta(0, 2):
                 next_enpassant = move.start + Delta(0, 1)
-            elif abs(move.delta()) == Delta(1, 1) and move.end == self.enpassant:
+            elif abs(move.delta()) == Delta(1, 1) and self.enpassant and move.end == self.enpassant:
                 self[move.start + Delta(move.delta().file, 0)] = EMPTY
         elif self[move.start] == BLACK_PAWN:
             if move.delta() == Delta(0, -2):
                 next_enpassant = move.start + Delta(0, -1)
-            elif abs(move.delta()) == Delta(1, 1) and move.end == self.enpassant:
+            elif abs(move.delta()) == Delta(1, 1) and self.enpassant and move.end == self.enpassant:
                 self[move.start + Delta(move.delta().file, 0)] = EMPTY
         elif self[move.start] == WHITE_ROOK:
             if move.start == Square(FILE_A, RANK_1):
@@ -579,16 +583,16 @@ class State:
 
     def generate_all_moves(self):
         moves = []
-        for rank in range(8):
-            for file in range(8):
+        for rank in range(RANK_1, RANK_8+1):
+            for file in range(FILE_A, FILE_H+1):
                 square = Square(file, rank)
                 moves.extend(self.generate_moves(square))
         return moves
 
     def is_any_move_legal(self):
         moves = []
-        for rank in range(8):
-            for file in range(8):
+        for rank in range(RANK_1, RANK_8+1):
+            for file in range(FILE_A, FILE_H+1):
                 square = Square(file, rank)
                 moves = self.generate_moves(square)
                 if moves:
@@ -598,32 +602,23 @@ class State:
 if __name__ == '__main__':
     state = State()
 
-    def m(a, b, c, d):
-        state.move(Move(Square(a, b), Square(c, d)))
-        print(state, state.whites_turn, f"{state.mine:08b}")
+    a2i = dict(zip('abcdefgh',range(8)))
 
-    m(4, 1, 4, 3)
-    m(4, 6, 4, 4)
-    m(6, 0, 5, 2)
-    m(1, 7, 2, 5)
-    m(5, 0, 2, 3)
-    m(6, 7, 5, 5)
-    m(5, 2, 6, 4)
-    m(3, 6, 3, 4)
-    m(4, 3, 3, 4)
-    m(5, 5, 3, 4)
-    m(6, 4, 5, 6)
-    m(4, 7, 5, 6)
-    m(3, 0, 5, 2)
-    m(5, 6, 6, 7)
-    m(2, 3, 3, 4)
-    m(3, 7, 3, 4)
-    m(5, 2, 3, 4)
-    m(2, 7, 4, 5)
-    m(3, 4, 4, 5)
-    print(state)
-    print('white', state.whites_turn)
-    print('mine check', state.is_mine_check())
-    print('oppo check', state.is_oppo_check())
-    print('mate', state.is_mate())
-    print(state.is_move_self_check(Move(Square(4, 4), Square(4, 5))))
+    def m2s(mov):
+        a, b, c, d = mov
+        return Move(
+            Square(a2i[a]+PAD, int(b)-1+PAD),
+            Square(a2i[c]+PAD, int(d)-1+PAD),
+        )
+
+    def m(mov):
+        state.move(m2s(mov))
+        print(state)
+
+    m('e2e4')
+    m('d7d5')
+    m('e4e5')
+    m('d5d4')
+    m('c2c4')
+
+    print(state.check_move(m2s('d4c3')))

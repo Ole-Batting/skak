@@ -1,5 +1,7 @@
 import sys
 
+from tqdm import tqdm
+
 from skak.bit_state import State
 
 
@@ -11,17 +13,12 @@ def test_permutations(state: State, depth: int, max_depth: int):
         return perm, mat
     total_perm = list()
     total_mat = list()
-    for move in state.generate_all_moves():
+    for move in tqdm(state.generate_all_moves(), disable=(depth!=0)):
         next_state = state.copy()
         next_state.move(move)
         perm, mat = test_permutations(next_state, depth+1, max_depth)
         total_perm.extend(perm)
         total_mat.extend(mat)
-    # if len(total_perm) == 0:
-    #     fen = repr(state)
-    #     perm = {fen}
-    #     mat = {fen} if state.is_mate() else set()
-    #     return perm, mat
     return total_perm, total_mat
 
 
