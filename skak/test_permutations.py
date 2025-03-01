@@ -1,6 +1,6 @@
 import sys
 
-from skak.game_state import State
+from skak.bit_state import State
 
 
 def test_permutations(state: State, depth: int, max_depth: int):

@@ -109,9 +109,3 @@ class Board:
         rank = 7 - inverted_rank
         return Square.from_index(file, rank)
 
-    @staticmethod
-    def sqname(file, rank):
-        file_name = "abcdefgh"[file]
-        rank_name = 8 - rank
-        return f"{file_name}{rank_name}"
-

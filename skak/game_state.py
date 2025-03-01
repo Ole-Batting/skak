@@ -87,11 +87,10 @@ class Delta:
         return max(self.file, self.rank)
 
 
+@dataclass
 class Square:
-    def __init__(self, file: FILE, rank: RANK):
-        self.file = file
-        self.rank = rank
-
+    file: FILE
+    rank: RANK
 
     @classmethod
     def from_index(cls, file: int, rank: int):
@@ -109,8 +108,8 @@ class Square:
         if file < 0 or file >= 8 or rank < 0 or rank >= 8:
             return InvalidSquare()
         return Square(
-            file = FILE.from_index(self.file.value + other.file),
-            rank = RANK.from_index(self.rank.value + other.rank),
+            file = FILE.from_index(file),
+            rank = RANK.from_index(rank),
         )
 
     def __str__(self):
@@ -258,7 +257,6 @@ class State:
         return isinstance(piece, self.your)
 
     def check_pawn_move(self, move: Move):
-        # TODO add enpassant
         dir = 1 if self.whites_turn else -1
         delta = move.end - move.start
         if delta == Delta(0, 2 * dir) and move.start.rank == (RANK._2 if self.whites_turn else RANK._7):

@@ -1,7 +1,7 @@
 import pygame
 
-from skak.game_state import State, Move
-from skak.ui_board import Board
+from skak.bit_state import State, Move
+from skak.bit_ui_board import Board
 
 
 board = Board(piece_px=9, square_px=15, px_width=4)
