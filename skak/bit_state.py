@@ -96,7 +96,7 @@ class Delta:
 
 
 class Square:
-    def __init__(self, file: int, rank: int, invalid: bool = False):
+    def __init__(self, file: int, rank: int):
         self.file = file
         self.rank = rank
 
@@ -358,16 +358,16 @@ class State:
     def is_mine_check(self):
         king_square = self.locate(self.mine | KING)[0]
         dir = 1 if self.whites_turn else -1
-        if any([
-            self[king_square + Delta(-1, dir)] in [self.oppo | PAWN, self.oppo | KING],
-            self[king_square + Delta(1, dir)] in [self.oppo | PAWN, self.oppo | KING],
-            self[king_square + Delta(-1, -dir)] == (self.oppo | KING),
-            self[king_square + Delta(1, -dir)] == (self.oppo | KING),
-            self[king_square + Delta(-1, 0)] == (self.oppo | KING),
-            self[king_square + Delta(1, 0)] == (self.oppo | KING),
-            self[king_square + Delta(0, -1)] == (self.oppo | KING),
-            self[king_square + Delta(0, 1)] == (self.oppo | KING),
-        ]):
+        if (
+            self[king_square + Delta(-1, dir)] in [self.oppo | PAWN, self.oppo | KING] and
+            self[king_square + Delta(1, dir)] in [self.oppo | PAWN, self.oppo | KING] and
+            self[king_square + Delta(-1, -dir)] == (self.oppo | KING) and
+            self[king_square + Delta(1, -dir)] == (self.oppo | KING) and
+            self[king_square + Delta(-1, 0)] == (self.oppo | KING) and
+            self[king_square + Delta(1, 0)] == (self.oppo | KING) and
+            self[king_square + Delta(0, -1)] == (self.oppo | KING) and
+            self[king_square + Delta(0, 1)] == (self.oppo | KING)
+        ):
             return True
         for dist_file, dist_rank in [(1, 2), (2, 1)]:
             for sign_file in [-1, 1]:
@@ -394,20 +394,19 @@ class State:
                     break
         return False
 
-
     def is_oppo_check(self):
         king_square = self.locate(self.oppo | KING)[0]
         dir = -1 if self.whites_turn else 1
-        if any([
-            self[king_square + Delta(-1, dir)] in [self.mine | PAWN, self.mine | KING],
-            self[king_square + Delta(1, dir)] in [self.mine | PAWN, self.mine | KING],
-            self[king_square + Delta(-1, -dir)] == (self.mine | KING),
-            self[king_square + Delta(1, -dir)] == (self.mine | KING),
-            self[king_square + Delta(-1, 0)] == (self.mine | KING),
-            self[king_square + Delta(1, 0)] == (self.mine | KING),
-            self[king_square + Delta(0, -1)] == (self.mine | KING),
-            self[king_square + Delta(0, 1)] == (self.mine | KING),
-        ]):
+        if (
+            self[king_square + Delta(-1, dir)] in [self.mine | PAWN, self.mine | KING] and
+            self[king_square + Delta(1, dir)] in [self.mine | PAWN, self.mine | KING] and
+            self[king_square + Delta(-1, -dir)] == (self.mine | KING) and
+            self[king_square + Delta(1, -dir)] == (self.mine | KING) and
+            self[king_square + Delta(-1, 0)] == (self.mine | KING) and
+            self[king_square + Delta(1, 0)] == (self.mine | KING) and
+            self[king_square + Delta(0, -1)] == (self.mine | KING) and
+            self[king_square + Delta(0, 1)] == (self.mine | KING)
+        ):
             return True
         for dist_file, dist_rank in [(1, 2), (2, 1)]:
             for sign_file in [-1, 1]:
