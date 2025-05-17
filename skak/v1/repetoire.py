@@ -7,17 +7,19 @@ from stockfish import Stockfish
 from tqdm import tqdm
 
 from skak.v1.state import State, Move, WHITE, BLACK
-from skak.v1.carver import viz, viz2, fraction
+from skak.v1.carver import viz, fraction
 
 
 PGN_DEPTH = 9 #19
 SF_DEPTH = 16 #18
 SF_N_TOP = 3
 LC_N_TOP = 6 #12
-LC_RARITY_A = 80 #100
-LC_PREVALENCE_A = 1/LC_RARITY_A
-LC_RARITY_B = 40 #60
-LC_PREVALENCE_B = 1/LC_RARITY_B
+LC_RARITY_MOVE = 80 #100
+LC_RARITY_POS = 40 #60
+LC_RARITY_MIN = 2 * LC_RARITY_MOVE
+LC_PREVALENCE_MOVE = 1/LC_RARITY_MOVE
+LC_PREVALENCE_POS = 1/LC_RARITY_POS
+LC_PREVALENCE_MIN = 1/LC_RARITY_MIN
 
 
 sf = Stockfish(
@@ -115,66 +117,17 @@ def opename(obj):
 
 class TreeNode(BaseModel):
     fen: str
-    opening_name: str | None
-    ratio: float
-    children: dict[str, tuple[str, int, 'TreeNode']]
-
-
-# TODO: refactor to avoid tuples in the tree and use the models directly
-def _build(state: State, ratio: float, depth: int, max_depth: int):
-    fen = repr(state)
-    posinfo = get_lichess_moves(fen)
-    if depth == max_depth:
-        return TreeNode(fen=fen, opening_name=opename(posinfo), ratio=ratio, children={})
-    sum_games = possum(posinfo)
-    out = {}
-    if state.whites_turn:
-        move_lan, _ = pick_move(
-            state=state,
-            posinfo=posinfo,
-            lc_wdb_stats=max(0, 250 - 20 * state.fullmovecounter),
-            lc_popularity=max(0, 350 - 40 * state.fullmovecounter),
-            sf_top_moves=max(0, 100 * state.fullmovecounter - 300),
-            sf_wdb_stats=max(0, 100 * state.fullmovecounter - 600),
-        )
-        move_state = state.copy()
-        move_state.move(Move.from_lan(move_lan, move_state.whites_turn))
-        move_san = state.to_san(move_lan)
-        out[move_lan] = (
-            move_san,
-            WHITE if state.whites_turn else BLACK,
-            _build(move_state, ratio, depth+1, max_depth),
-        )
-    else:
-        for move in tqdm(posinfo.moves, desc=str(depth//2), position=depth//2, leave=None):
-            move_state = state.copy()
-            move_state.move(Move.from_lan(move.uci, move_state.whites_turn))
-            move_ratio = possum(move) / sum_games
-            if ratio > LC_PREVALENCE_B and len(out) < 2:
-                pass
-            elif ratio * move_ratio < LC_PREVALENCE_A:
-                continue
-            out[move.uci] = (
-                move.san,
-                WHITE if state.whites_turn else BLACK,
-                _build(move_state, ratio*move_ratio, depth+1, max_depth),
-            )
-    return TreeNode(fen=fen, opening_name=opename(posinfo), ratio=ratio, children=out)
-
-
-class TreeNode2(BaseModel):
-    fen: str
     san: str
     opening_name: str | None
     engine_eval: int | None
     average_rating: int | None
-    ratio: float
-    children: dict[str, 'TreeNode2']
+    ratio: float | None
+    children: dict[str, 'TreeNode']
 
 
-def build2(max_depth: int):
+def build(max_depth: int):
     state = State()
-    root = TreeNode2(
+    root = TreeNode(
         fen=repr(state),
         san="",
         opening_name=None,
@@ -183,11 +136,11 @@ def build2(max_depth: int):
         ratio=1,
         children={},
     )
-    _build2(root, state, 1, 0, max_depth)
+    _build(root, state, 1, 0, max_depth)
     return root
 
 
-def _build2(node: TreeNode2, state: State, ratio: float, depth: int, max_depth: int):
+def _build(node: TreeNode, state: State, ratio: float, depth: int, max_depth: int):
     if depth == max_depth:
         return node
     posinfo = get_lichess_moves(repr(state))
@@ -204,7 +157,7 @@ def _build2(node: TreeNode2, state: State, ratio: float, depth: int, max_depth: 
         move_state = state.copy()
         move_state.move(Move.from_lan(move_lan, move_state.whites_turn))
         move_san = state.to_san(move_lan)
-        move_node = TreeNode2(
+        move_node = TreeNode(
             fen=repr(move_state),
             san=move_san,
             opening_name=opename(move_info) if move_info is not None else None,
@@ -214,17 +167,19 @@ def _build2(node: TreeNode2, state: State, ratio: float, depth: int, max_depth: 
             children={},
         )
         node.children[move_lan] = move_node
-        _build2(move_node, move_state, ratio, depth+1, max_depth)
+        _build(move_node, move_state, ratio, depth+1, max_depth)
     else:
         for move in tqdm(posinfo.moves, desc=str(depth//2), position=depth//2, leave=None):
             move_state = state.copy()
             move_state.move(Move.from_lan(move.uci, move_state.whites_turn))
             move_ratio = possum(move) / totalgames
-            if ratio > LC_PREVALENCE_B and len(node.children) < 2:
-                pass
-            elif ratio * move_ratio < LC_PREVALENCE_A:
+            if ratio * move_ratio < LC_PREVALENCE_MIN:
                 continue
-            move_node = TreeNode2(
+            elif ratio > LC_PREVALENCE_POS and len(node.children) < 2:
+                pass
+            elif ratio * move_ratio < LC_PREVALENCE_MOVE:
+                continue
+            move_node = TreeNode(
                 fen=repr(move_state),
                 san=state.to_san(move.uci),
                 opening_name=opename(move),
@@ -234,7 +189,7 @@ def _build2(node: TreeNode2, state: State, ratio: float, depth: int, max_depth: 
                 children={},
             )
             node.children[move.uci] = move_node
-            _build2(move_node, move_state, ratio * move_ratio, depth+1, max_depth)
+            _build(move_node, move_state, ratio * move_ratio, depth+1, max_depth)
 
 
 def white_draws_black_sf(state: State):
@@ -291,7 +246,6 @@ def pick_move(
     if (sf_top_moves + sf_wdb_stats) > 0:
         for result in sf.get_top_moves(SF_N_TOP):
             move_lan = result["Move"]
-            
 
             if result["Mate"]:
                 return move_lan
@@ -324,25 +278,13 @@ def pick_move(
 def count_moves_in_tree(tree):
     if len(tree.children) == 0:
         return 1
-    return sum(count_moves_in_tree(child) for _, _, child in tree.children.values()) + 1
-
-
-def count_moves_in_tree2(tree):
-    if len(tree.children) == 0:
-        return 1
-    return sum(count_moves_in_tree2(child) for child in tree.children.values()) + 1
+    return sum(count_moves_in_tree(child) for child in tree.children.values()) + 1
 
 
 def count_lines_in_tree(tree):
     if len(tree.children) == 0:
         return 1
-    return sum(count_lines_in_tree(child) for _, _, child in tree.children.values())
-
-
-def count_lines_in_tree2(tree):
-    if len(tree.children) == 0:
-        return 1
-    return sum(count_lines_in_tree2(child) for child in tree.children.values())
+    return sum(count_lines_in_tree(child) for child in tree.children.values())
 
 
 def get_coverage(tree, depth=0, stat=list()):
@@ -350,20 +292,13 @@ def get_coverage(tree, depth=0, stat=list()):
         stat.append(tree.ratio)
     else:
         stat[depth] += tree.ratio
-    for _, _, child in tree.children.values():
+    for child in tree.children.values():
         get_coverage(child, depth+1, stat)
     return stat
 
 
-def get_coverage2(tree, depth=0, stat=list()):
-    if len(stat) <= depth:
-        stat.append(tree.ratio)
-    else:
-        stat[depth] += tree.ratio
-    for child in tree.children.values():
-        get_coverage2(child, depth+1, stat)
-    return stat
-
+def color_from_fen(fen):
+    return WHITE if 'w' in fen else BLACK
 
 def generate_pgn(tree, ply=0, mainline=True):
     if not tree.children:
@@ -372,18 +307,18 @@ def generate_pgn(tree, ply=0, mainline=True):
     pgn = ""
     first = True
     first_child = None
-    for san, color, child in tree.children.values():
+    for child in tree.children.values():
         prefix = ""
-        if color == WHITE:
+        if color_from_fen(child.fen) == WHITE:
             prefix = f"{move_number}. "
         else:
             prefix = f"{move_number}... "
         if first:
-            pgn += prefix + san
+            pgn += prefix + child.san
             first = False
             first_child = child
         else:
-            pgn += f" ({prefix}{san} " + generate_pgn(child, ply+1, mainline=False) + ")"
+            pgn += f" ({prefix}{child.san} " + generate_pgn(child, ply+1, mainline=False) + ")"
     pgn += " " + generate_pgn(first_child, ply+1) if tree.children else ""
     return pgn.strip()
 
@@ -397,7 +332,15 @@ def save_as_pgn(tree, tag: str = ""):
 
 def load_pgn_to_tree(filepath):
     with open(filepath, 'r') as infile:
-        pass
+        pgn_str = infile.read()
+
+    root_state = State()
+    root = TreeNode(fen=repr(root_state), san="", children={})
+    stack = [(root, root_state)]
+
+    while stack:
+        node, state = stack.pop()
+
 
 
 if __name__ == "__main__":
@@ -406,15 +349,6 @@ if __name__ == "__main__":
     print(count_moves_in_tree(tree))
     print(count_lines_in_tree(tree))
     stat = get_coverage(tree)
-    for i, s in enumerate(stat):
-        print(f"move {i//2:2d} ply {i:2d} coverage={s:.3f}")
-    # save_as_pgn(tree)
-
-    tree = build2(PGN_DEPTH)
-    viz2(tree)
-    print(count_moves_in_tree2(tree))
-    print(count_lines_in_tree2(tree))
-    stat = get_coverage2(tree)
     for i, s in enumerate(stat):
         print(f"move {i//2:2d} ply {i:2d} coverage={s:.3f}")
     # save_as_pgn(tree)
