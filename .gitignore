@@ -1,3 +1,6 @@
 *.pgn
 */__pycache__/
 *.prof
+
+/venv/
+/dist/
